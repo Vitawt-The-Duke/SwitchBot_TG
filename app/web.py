@@ -44,3 +44,20 @@ async def api_turn_off():
 @app.get("/api/info")
 async def api_info():
     return await bot_client.get_info()
+
+
+def main():
+    import logging
+    import uvicorn
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    logger = logging.getLogger("web")
+    logger.info("Starting SwitchBot Web UI on %s:%s...", settings.web_host, settings.web_port)
+    uvicorn.run(app, host=settings.web_host, port=settings.web_port, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

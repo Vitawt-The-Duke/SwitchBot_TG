@@ -101,16 +101,23 @@ WEB_PORT=8085
 ```
 
 ### Step 5: Test via Command Line
-```bash
-~/switchbot-env/bin/python3 -m app.main
-```
-Or test via the CLI wrapper:
-```bash
-switchbot press
-switchbot on
-switchbot off
-switchbot info
-```
+
+You can run each component independently or together:
+
+- **Run Web Dashboard & REST API separately:**
+  ```bash
+  ~/switchbot-env/bin/python3 -m app.web
+  ```
+
+- **Run Telegram Bot separately:**
+  ```bash
+  ~/switchbot-env/bin/python3 -m app.bot
+  ```
+
+- **Run Combined Gateway (Web + Telegram):**
+  ```bash
+  ~/switchbot-env/bin/python3 -m app.main
+  ```
 
 ### Step 6: Install as Systemd Services (Auto-start on Boot)
 ```bash
@@ -118,9 +125,18 @@ chmod +x scripts/*.sh
 ./scripts/install_service.sh
 ```
 
-Inspect service logs:
+This installs and starts independent services:
+- `switchbot-web.service` (Web dashboard & REST API)
+- `switchbot-bot.service` (Telegram Bot daemon)
+- `switchbot-tune.service` (BLE kernel parameter tuning)
+
+Inspect service logs individually:
 ```bash
-sudo journalctl -u switchbot-app.service -f
+# Web UI logs
+sudo journalctl -u switchbot-web.service -f
+
+# Telegram Bot logs
+sudo journalctl -u switchbot-bot.service -f
 ```
 
 ---

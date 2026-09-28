@@ -16,6 +16,11 @@ class TestConfig(unittest.TestCase):
     def test_empty_allowed_users(self):
         s = Settings(telegram_allowed_users_raw="")
         self.assertEqual(s.allowed_users, set())
+        self.assertEqual(s.ble_lock_file, "/tmp/switchbot_ble.lock")
+
+    def test_custom_lock_file(self):
+        s = Settings(ble_lock_file="/tmp/custom.lock")
+        self.assertEqual(s.ble_lock_file, "/tmp/custom.lock")
 
 
 if __name__ == "__main__":

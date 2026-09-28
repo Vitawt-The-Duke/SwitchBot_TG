@@ -54,6 +54,12 @@ class TestWeb(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("SwitchBot S1", response.text)
 
+    @patch("uvicorn.run")
+    def test_web_main(self, mock_uvicorn_run):
+        from app.web import main
+        main()
+        mock_uvicorn_run.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

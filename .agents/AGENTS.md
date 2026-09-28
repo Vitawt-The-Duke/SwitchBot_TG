@@ -8,21 +8,24 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
 /projects/SwitchBot_TG/
 ├── app/
 │   ├── config.py           # Configuration loader (dataclass from .env / env vars)
-│   ├── switchbot_client.py # Async BLE client wrapping PySwitchbot with asyncio.Lock
-│   ├── web.py              # FastAPI application + HTML endpoints
-│   ├── bot.py              # Aiogram 3.x Telegram bot handlers & keyboards
-│   ├── main.py             # Uvicorn + Aiogram async entrypoint runner
+│   ├── switchbot_client.py # Async BLE client wrapping PySwitchbot with asyncio.Lock & FileLock
+│   ├── web.py              # FastAPI application + HTML endpoints (standalone runner via `python -m app.web`)
+│   ├── bot.py              # Aiogram 3.x Telegram bot handlers (standalone runner via `python -m app.bot`)
+│   ├── main.py             # Combined Uvicorn + Aiogram async runner
 │   └── templates/
 │       └── index.html      # Mobile-first dark-mode Web UI
 ├── tests/
-│   ├── test_config.py      # Config parsing & allowed users tests
-│   └── test_web.py         # FastAPI endpoint tests
+│   ├── test_config.py           # Config parsing & allowed users tests
+│   ├── test_web.py              # FastAPI endpoint tests
+│   ├── test_bot.py              # Aiogram handlers & keyboards tests
+│   └── test_switchbot_client.py # SwitchBotClient & FileLock tests
 ├── scripts/
 │   ├── tune_bluetooth.sh   # Sets BLE kernel parameters (supervision_timeout=3000ms)
 │   └── install_service.sh  # Installs and enables systemd units
 └── systemd/
     ├── switchbot-tune.service # Oneshot tuning service on boot
-    └── switchbot-app.service  # Main daemon service
+    ├── switchbot-web.service  # Standalone Web Dashboard & REST API service
+    └── switchbot-bot.service  # Standalone Telegram Bot service
 ```
 
 ---
@@ -39,8 +42,8 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
    Default `supervision_timeout` on Raspberry Pi 5 is 42 (420ms). It causes `le-connection-abort-by-local` and disconnects with `Connection Timeout (0x08)`. Must be set to `300` (3000ms) via debugfs:
    `/sys/kernel/debug/bluetooth/hci0/supervision_timeout`.
 
-4. **BLE Locking**:
-   Never invoke simultaneous BLE operations. `switchbot_client.py` uses `asyncio.Lock()` to serialize calls across web and telegram.
+4. **BLE Locking (Process & Thread Safety)**:
+   Never invoke simultaneous BLE operations. `switchbot_client.py` uses `asyncio.Lock()` for intra-process serialization and an inter-process `FileLock` (`fcntl.flock` on `/tmp/switchbot_ble.lock`) to serialize calls across independent processes (e.g. `switchbot-web.service` and `switchbot-bot.service`).
 
 ---
 
@@ -50,12 +53,21 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
   ```bash
   ~/switchbot-env/bin/python3 -m unittest discover tests
   ```
-- Run server manually:
+- Run web server separately:
+  ```bash
+  ~/switchbot-env/bin/python3 -m app.web
+  ```
+- Run telegram bot separately:
+  ```bash
+  ~/switchbot-env/bin/python3 -m app.bot
+  ```
+- Run combined gateway:
   ```bash
   ~/switchbot-env/bin/python3 -m app.main
   ```
 - Service management:
   ```bash
-  sudo systemctl restart switchbot-app.service
-  sudo journalctl -u switchbot-app.service -f
+  sudo systemctl restart switchbot-web.service switchbot-bot.service
+  sudo journalctl -u switchbot-web.service -f
+  sudo journalctl -u switchbot-bot.service -f
   ```

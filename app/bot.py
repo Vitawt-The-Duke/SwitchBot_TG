@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
@@ -157,3 +158,22 @@ async def run_bot():
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
+
+
+def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    if not settings.telegram_bot_token:
+        logger.warning("TELEGRAM_BOT_TOKEN is not configured! Please specify it in .env or environment.")
+        return
+    logger.info("Starting SwitchBot Telegram Bot...")
+    try:
+        asyncio.run(run_bot())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Telegram Bot stopped.")
+
+
+if __name__ == "__main__":
+    main()

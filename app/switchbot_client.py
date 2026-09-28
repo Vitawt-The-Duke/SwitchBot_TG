@@ -5,51 +5,91 @@ from bleak import BleakScanner
 from switchbot import Switchbot
 from app.config import settings
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
 logger = logging.getLogger("switchbot_client")
 
 
+class FileLock:
+    def __init__(self, lock_path: str = "/tmp/switchbot_ble.lock"):
+        self.lock_path = lock_path
+        self._fd = None
+
+    def acquire(self):
+        if fcntl is None:
+            return
+        try:
+            self._fd = open(self.lock_path, "w+")
+            fcntl.flock(self._fd, fcntl.LOCK_EX)
+        except Exception as e:
+            logger.warning("Could not acquire file lock %s: %s", self.lock_path, e)
+
+    def release(self):
+        if fcntl is None or not self._fd:
+            return
+        try:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            self._fd.close()
+        except Exception as e:
+            logger.warning("Error releasing file lock %s: %s", self.lock_path, e)
+        finally:
+            self._fd = None
+
+    async def __aenter__(self):
+        await asyncio.to_thread(self.acquire)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await asyncio.to_thread(self.release)
+
+
 class SwitchBotClient:
-    def __init__(self, mac: str | None = None, password: str | None = None):
+    def __init__(self, mac: str | None = None, password: str | None = None, lock_path: str | None = None):
         self.mac = (mac or settings.switchbot_mac).upper()
         self.password = password if password is not None else settings.switchbot_password
         self._lock = asyncio.Lock()
+        self.file_lock = FileLock(lock_path or settings.ble_lock_file)
 
     async def _execute_action(self, action_name: str) -> dict[str, Any]:
         async with self._lock:
-            logger.info("Scanning for SwitchBot %s...", self.mac)
-            device = await BleakScanner.find_device_by_address(self.mac, timeout=10.0)
-            if not device:
-                msg = f"Device {self.mac} not found in BLE scan. Ensure phone app is closed and device is nearby."
-                logger.warning(msg)
-                return {"success": False, "message": msg, "data": None}
+            async with self.file_lock:
+                logger.info("Scanning for SwitchBot %s...", self.mac)
+                device = await BleakScanner.find_device_by_address(self.mac, timeout=10.0)
+                if not device:
+                    msg = f"Device {self.mac} not found in BLE scan. Ensure phone app is closed and device is nearby."
+                    logger.warning(msg)
+                    return {"success": False, "message": msg, "data": None}
 
-            logger.info("Connected to %s (%s). Executing %s...", device.address, device.name, action_name)
-            bot = Switchbot(device, password=self.password)
+                logger.info("Connected to %s (%s). Executing %s...", device.address, device.name, action_name)
+                bot = Switchbot(device, password=self.password)
 
-            try:
-                if action_name == "press":
-                    res = await bot.press()
-                elif action_name == "on":
-                    res = await bot.turn_on()
-                elif action_name == "off":
-                    res = await bot.turn_off()
-                elif action_name == "info":
-                    info = await bot.get_basic_info()
-                    return {
-                        "success": True,
-                        "message": "Device info retrieved successfully",
-                        "data": info,
-                    }
-                else:
-                    return {"success": False, "message": f"Unknown action: {action_name}", "data": None}
+                try:
+                    if action_name == "press":
+                        res = await bot.press()
+                    elif action_name == "on":
+                        res = await bot.turn_on()
+                    elif action_name == "off":
+                        res = await bot.turn_off()
+                    elif action_name == "info":
+                        info = await bot.get_basic_info()
+                        return {
+                            "success": True,
+                            "message": "Device info retrieved successfully",
+                            "data": info,
+                        }
+                    else:
+                        return {"success": False, "message": f"Unknown action: {action_name}", "data": None}
 
-                if res:
-                    return {"success": True, "message": f"Action \x27{action_name}\x27 executed successfully!", "data": None}
-                else:
-                    return {"success": False, "message": f"Action \x27{action_name}\x27 returned unsuccessful (check PIN/password).", "data": None}
-            except Exception as e:
-                logger.exception("Error during SwitchBot execution:")
-                return {"success": False, "message": f"BLE execution error: {str(e)}", "data": None}
+                    if res:
+                        return {"success": True, "message": f"Action '{action_name}' executed successfully!", "data": None}
+                    else:
+                        return {"success": False, "message": f"Action '{action_name}' returned unsuccessful (check PIN/password).", "data": None}
+                except Exception as e:
+                    logger.exception("Error during SwitchBot execution:")
+                    return {"success": False, "message": f"BLE execution error: {str(e)}", "data": None}
 
     async def press(self) -> dict[str, Any]:
         return await self._execute_action("press")

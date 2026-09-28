@@ -14,6 +14,7 @@ class Settings:
     web_host: str = os.getenv("WEB_HOST", "0.0.0.0").strip()
     web_port: int = int(os.getenv("WEB_PORT", "8085"))
     web_api_key: str | None = os.getenv("WEB_API_KEY", "").strip() or None
+    ble_lock_file: str = os.getenv("BLE_LOCK_FILE", "/tmp/switchbot_ble.lock").strip()
 
     allowed_users: set[int] = field(default_factory=set)
 
