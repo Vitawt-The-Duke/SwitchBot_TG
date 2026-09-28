@@ -34,12 +34,12 @@ class TestHistory(unittest.TestCase):
 
     def test_format_telegram_history(self):
         empty_text = self.history.format_telegram_history()
-        self.assertIn("пустая", empty_text)
+        self.assertIn("empty", empty_text)
 
         self.history.record(action="press", user_id=111, user_name="Alice", success=True, message="Success")
         text = self.history.format_telegram_history()
         self.assertIn("Alice", text)
-        self.assertIn("Кароткі націск", text)
+        self.assertIn("Short Press", text)
         self.assertIn("111", text)
 
     def test_file_persistence_and_reload(self):

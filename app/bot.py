@@ -105,8 +105,8 @@ async def start_handler(message: types.Message, bot: Bot):
 
     if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         await message.answer(
-            f"⛔ <b>Access Denied</b>\nВаш User ID: <code>{user_id}</code> | Chat ID: <code>{chat_id}</code>\n"
-            f"Каб атрымаць доступ, дадайце User ID у <code>TELEGRAM_ALLOWED_USER_IDS</code> альбо ID гэтага чата ў <code>TELEGRAM_ALLOWED_CHAT_IDS</code>.",
+            f"⛔ <b>Access Denied</b>\nYour User ID: <code>{user_id}</code> | Chat ID: <code>{chat_id}</code>\n"
+            f"To grant access, add User ID to <code>TELEGRAM_ALLOWED_USER_IDS</code> or Chat ID to <code>TELEGRAM_ALLOWED_CHAT_IDS</code> in <code>.env</code>.",
             parse_mode="HTML"
         )
         return
@@ -114,7 +114,7 @@ async def start_handler(message: types.Message, bot: Bot):
     text = (
         f"👋 <b>SwitchBot Gateway Controller</b>\n\n"
         f"📍 <b>Device MAC:</b> <code>{settings.switchbot_mac}</code>\n"
-        f"🎮 Кіруйце девайсам праз кнопкі альбо камандамі (/help):"
+        f"🎮 Control your device using the buttons below or commands (/help):"
     )
     if chat_type == "channel":
         await message.answer(text, parse_mode="HTML", reply_markup=get_inline_keyboard())
@@ -133,35 +133,35 @@ async def help_handler(message: types.Message, bot: Bot):
 
     if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         await message.answer(
-            f"⛔ <b>Access Denied (Няма доступу)</b>\n"
-            f"ID гэтага чата: <code>{chat_id}</code> | Ваш User ID: <code>{user_id}</code>\n\n"
-            f"Каб даць доступ гэтаму каналу/групе, пазначце ў <code>.env</code>:\n"
+            f"⛔ <b>Access Denied</b>\n"
+            f"Chat ID: <code>{chat_id}</code> | User ID: <code>{user_id}</code>\n\n"
+            f"To grant access to this chat/channel, add to <code>.env</code>:\n"
             f"<code>TELEGRAM_ALLOWED_CHAT_IDS={chat_id}</code>",
             parse_mode="HTML"
         )
         return
 
     text = (
-        "🤖 <b>Даведка па камандах SwitchBot:</b>\n\n"
-        "🔘 <b>Кіраванне прыладай:</b>\n"
-        "• <code>/press</code> — Кароткатэрміновы націск (Short Press)\n"
-        "• <code>/longpress [сек]</code> — Доўгатэрміновы націск (Long Press, дэфолт: 5 сек)\n"
-        "• <code>/on</code> — Перавесці перамыкач у стан ON\n"
-        "• <code>/off</code> — Перавесці перамыкач у стан OFF\n"
-        "• <code>/info</code> — Запыт інфармацыі і зараду батарэі\n\n"
-        "📊 <b>Маніторынг і сэрвіс:</b>\n"
-        "• <code>/health</code> — Стан сэрвісаў, шлюза і Bluetooth\n"
-        "• <code>/history</code> — Журнал апошніх дзеянняў (хто націскаў)\n"
-        "• <code>/schedule</code> — Стан рандомнага раскладу ў працоўны час\n"
-        "• <code>/help</code> — Гэты спіс каманд\n\n"
-        "<i>Інтэрактыўнае кіраванне кнопкамі ніжэй:</i>"
+        "🤖 <b>SwitchBot Bot Command Reference:</b>\n\n"
+        "🔘 <b>Device Controls:</b>\n"
+        "• <code>/press</code> — Short momentary press\n"
+        "• <code>/longpress [sec]</code> — Long press holding arm down (default: 5s)\n"
+        "• <code>/on</code> — Turn switch ON\n"
+        "• <code>/off</code> — Turn switch OFF\n"
+        "• <code>/info</code> — Query device status & battery\n\n"
+        "📊 <b>Monitoring & Service:</b>\n"
+        "• <code>/health</code> — Gateway health, service status & Bluetooth\n"
+        "• <code>/history</code> — Action audit log (recent triggers)\n"
+        "• <code>/schedule</code> — Workday scheduler status (or <code>/schedule on</code> / <code>/schedule off</code>)\n"
+        "• <code>/help</code> — Show this command reference\n\n"
+        "<i>Interactive controls via buttons below:</i>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_inline_keyboard())
 
 
 async def execute_and_respond(event: types.Message | types.CallbackQuery, action: str, duration: int = 5):
     msg_target = event if isinstance(event, types.Message) else event.message
-    status_msg = await msg_target.answer(f"⏳ Сувязь са SwitchBot ({action})...")
+    status_msg = await msg_target.answer(f"⏳ Connecting to SwitchBot ({action})...")
 
     user_id, user_name = get_user_display_name(event)
     chat = event.chat if isinstance(event, types.Message) else (event.message.chat if event.message else None)
@@ -179,7 +179,7 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
     elif action == "info":
         res = await bot_client.get_info()
     else:
-        res = {"success": False, "message": f"Невядомае дзеянне: {action}"}
+        res = {"success": False, "message": f"Unknown action: {action}"}
 
     success = res.get("success", False)
     msg_text = res.get("message", "")
@@ -197,20 +197,20 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
     if success:
         if action == "info" and res.get("data"):
             d = res["data"]
-            mode_str = "Перамыкач (Switch)" if d.get("switchMode") else "Кнопка (Press)"
+            mode_str = "Switch Mode" if d.get("switchMode") else "Press Mode"
             text = (
-                f"✅ <b>Стан SwitchBot</b>\n"
-                f"🔋 Батарэя: <b>{d.get('battery')}%</b>\n"
-                f"⚙️ Прашыўка: {d.get('firmware')}\n"
-                f"📌 Рэжым: {mode_str}\n"
-                f"⏱️ Націск: {d.get('holdSeconds', 0)} сек"
+                f"✅ <b>SwitchBot Device Status</b>\n"
+                f"🔋 Battery: <b>{d.get('battery')}%</b>\n"
+                f"⚙️ Firmware: {d.get('firmware')}\n"
+                f"📌 Mode: {mode_str}\n"
+                f"⏱️ Hold time: {d.get('holdSeconds', 0)}s"
             )
         elif action == "long_press":
-            text = f"✅ Паспяховы доўгі націск ({duration} сек)!"
+            text = f"✅ Long press executed successfully ({duration}s)!"
         else:
             text = f"✅ {msg_text}"
     else:
-        text = f"❌ Памылка: {msg_text}"
+        text = f"❌ Error: {msg_text}"
 
     await status_msg.edit_text(text, parse_mode="HTML")
 
@@ -294,14 +294,14 @@ async def msg_health(message: types.Message, bot: Bot):
     stats = action_history.get_stats()
     sched = scheduler.get_status()
     text = (
-        f"❤️ <b>Дыягностыка і стан шлюза (Health):</b>\n\n"
-        f"• <b>Шлюз:</b> 🟢 Нармальны (OK)\n"
-        f"• <b>Аптайм бота:</b> {stats['uptime_seconds']} сек (~{stats['uptime_seconds'] // 60} хв)\n"
-        f"• <b>MAC прылады:</b> <code>{settings.switchbot_mac}</code>\n"
-        f"• <b>Файлавы лак BLE:</b> <code>{settings.ble_lock_file}</code>\n"
-        f"• <b>Аўта-расклад (Scheduler):</b> {'🟢 Уключаны' if sched['enabled'] else '🔴 Адключаны'}\n"
-        f"• <b>Зарэгістравана дзеянняў:</b> <b>{stats['total_actions']}</b> (паспяховых: {stats['successes']})\n"
-        f"• <b>Апошняе дзеянне:</b> <code>{stats['last_action_at'] or 'няма'}</code>"
+        f"❤️ <b>Gateway Diagnostics & Health:</b>\n\n"
+        f"• <b>Gateway Status:</b> 🟢 Operational (OK)\n"
+        f"• <b>Bot Uptime:</b> {stats['uptime_seconds']}s (~{stats['uptime_seconds'] // 60} min)\n"
+        f"• <b>Target MAC:</b> <code>{settings.switchbot_mac}</code>\n"
+        f"• <b>BLE Lock:</b> <code>{settings.ble_lock_file}</code>\n"
+        f"• <b>Workday Scheduler:</b> {'🟢 Enabled' if sched['enabled'] else '🔴 Disabled'}\n"
+        f"• <b>Total Operations:</b> <b>{stats['total_actions']}</b> (Success: {stats['successes']})\n"
+        f"• <b>Last Action:</b> <code>{stats['last_action_at'] or 'None'}</code>"
     )
     await message.answer(text, parse_mode="HTML")
 
@@ -334,19 +334,19 @@ async def msg_schedule(message: types.Message, bot: Bot):
         subcmd = parts[1]
         if subcmd in ["on", "start", "enable"]:
             scheduler.enable()
-            await message.answer("🟢 Аўтаматычны расклад <b>уключаны</b>!", parse_mode="HTML")
+            await message.answer("🟢 Workday scheduler <b>enabled</b>!", parse_mode="HTML")
             return
         elif subcmd in ["off", "stop", "disable"]:
             scheduler.disable()
-            await message.answer("🔴 Аўтаматычны расклад <b>прыпынены</b>!", parse_mode="HTML")
+            await message.answer("🔴 Workday scheduler <b>paused</b>!", parse_mode="HTML")
             return
 
     text = scheduler.format_telegram_status()
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🟢 Уключыць", callback_data="sched_on"),
-                InlineKeyboardButton(text="🔴 Прыпыніць", callback_data="sched_off"),
+                InlineKeyboardButton(text="🟢 Enable", callback_data="sched_on"),
+                InlineKeyboardButton(text="🔴 Pause", callback_data="sched_off"),
             ]
         ]
     )
@@ -360,7 +360,7 @@ async def callback_handler(callback: types.CallbackQuery, bot: Bot):
     chat_type = callback.message.chat.type if callback.message else "private"
 
     if not await is_user_authorized(bot, chat_id, user_id, chat_type):
-        await callback.answer("⛔ Access Denied (Няма доступу)", show_alert=True)
+        await callback.answer("⛔ Access Denied", show_alert=True)
         return
 
     await callback.answer()
@@ -372,13 +372,13 @@ async def callback_handler(callback: types.CallbackQuery, bot: Bot):
         stats = action_history.get_stats()
         sched = scheduler.get_status()
         text = (
-            f"❤️ <b>Дыягностыка і стан шлюза (Health):</b>\n\n"
-            f"• <b>Шлюз:</b> 🟢 Нармальны (OK)\n"
-            f"• <b>Аптайм:</b> {stats['uptime_seconds']} сек\n"
-            f"• <b>MAC прылады:</b> <code>{settings.switchbot_mac}</code>\n"
-            f"• <b>Аўта-расклад:</b> {'🟢 Уключаны' if sched['enabled'] else '🔴 Адключаны'}\n"
-            f"• <b>Усяго аперацый:</b> <b>{stats['total_actions']}</b>\n"
-            f"• <b>Апошняе дзеянне:</b> <code>{stats['last_action_at'] or 'няма'}</code>"
+            f"❤️ <b>Gateway Diagnostics & Health:</b>\n\n"
+            f"• <b>Gateway:</b> 🟢 Operational (OK)\n"
+            f"• <b>Uptime:</b> {stats['uptime_seconds']}s\n"
+            f"• <b>Device MAC:</b> <code>{settings.switchbot_mac}</code>\n"
+            f"• <b>Workday Scheduler:</b> {'🟢 Enabled' if sched['enabled'] else '🔴 Disabled'}\n"
+            f"• <b>Total Operations:</b> <b>{stats['total_actions']}</b>\n"
+            f"• <b>Last Action:</b> <code>{stats['last_action_at'] or 'None'}</code>"
         )
         if callback.message:
             await callback.message.answer(text, parse_mode="HTML")
@@ -391,8 +391,8 @@ async def callback_handler(callback: types.CallbackQuery, bot: Bot):
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="🟢 Уключыць", callback_data="sched_on"),
-                    InlineKeyboardButton(text="🔴 Прыпыніць", callback_data="sched_off"),
+                    InlineKeyboardButton(text="🟢 Enable", callback_data="sched_on"),
+                    InlineKeyboardButton(text="🔴 Pause", callback_data="sched_off"),
                 ]
             ]
         )
@@ -401,11 +401,11 @@ async def callback_handler(callback: types.CallbackQuery, bot: Bot):
     elif data == "sched_on":
         scheduler.enable()
         if callback.message:
-            await callback.message.answer("🟢 Аўтаматычны расклад <b>уключаны</b>!", parse_mode="HTML")
+            await callback.message.answer("🟢 Workday scheduler <b>enabled</b>!", parse_mode="HTML")
     elif data == "sched_off":
         scheduler.disable()
         if callback.message:
-            await callback.message.answer("🔴 Аўтаматычны расклад <b>прыпынены</b>!", parse_mode="HTML")
+            await callback.message.answer("🔴 Workday scheduler <b>paused</b>!", parse_mode="HTML")
 
 
 async def run_bot():

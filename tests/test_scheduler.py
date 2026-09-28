@@ -58,7 +58,7 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
 
     def test_format_telegram_status(self):
         status_text = self.scheduler.format_telegram_status()
-        self.assertIn("Стан аўтаматычнага раскладу", status_text)
+        self.assertIn("Workday Scheduler Status", status_text)
         self.assertIn("09:00 - 17:00", status_text)
 
 

@@ -151,22 +151,22 @@ class ActionHistory:
     def format_telegram_history(self, limit: int = 8) -> str:
         records = list(self._records)[:limit]
         if not records:
-            return "📭 <b>Гісторыя дзеянняў пустая</b>\n(Яшчэ не было зарэгістравана націсканняў ці каманд)"
+            return "📭 <b>Action history is empty</b>\n(No actions or commands recorded yet)"
 
-        lines = [f"📜 <b>Апошнія {len(records)} дзеянняў:</b>\n"]
+        lines = [f"📜 <b>Recent {len(records)} actions:</b>\n"]
         for idx, r in enumerate(records, start=1):
             status_icon = "✅" if r.success else "❌"
             action_names = {
-                "press": "🔘 Кароткі націск",
-                "long_press": "⏱️ Доўгі націск",
-                "on": "🟢 Уключэнне (ON)",
-                "off": "🔴 Выключэнне (OFF)",
-                "info": "🔋 Запыт статусу",
-                "scheduler": "⏰ Аўта-расклад (press)",
+                "press": "🔘 Short Press",
+                "long_press": "⏱️ Long Press",
+                "on": "🟢 Turn ON",
+                "off": "🔴 Turn OFF",
+                "info": "🔋 Device Status",
+                "scheduler": "⏰ Workday Scheduler (press)",
             }
             action_display = action_names.get(r.action, f"⚡ {r.action}")
             user_part = f"<b>{r.user_name}</b> (<code>{r.user_id}</code>)"
-            chat_part = f" у <i>{r.chat_title}</i>" if r.chat_title else ""
+            chat_part = f" in <i>{r.chat_title}</i>" if r.chat_title else ""
             lines.append(
                 f"{idx}. {status_icon} {action_display} — {user_part}{chat_part}\n"
                 f"   🕒 <code>{r.time_str}</code> | {r.message}"

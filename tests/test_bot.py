@@ -189,7 +189,7 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         await execute_and_respond(msg, "long_press", duration=10)
         mock_long_press.assert_awaited_once_with(duration=10)
         status_msg.edit_text.assert_awaited_once()
-        self.assertIn("10 сек", status_msg.edit_text.await_args.args[0])
+        self.assertIn("10s", status_msg.edit_text.await_args.args[0])
 
     @patch("app.bot.bot_client.long_press", new_callable=AsyncMock)
     async def test_msg_long_press_custom_arg(self, mock_long_press):
@@ -232,7 +232,7 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         cb = make_callback(user_id=999, chat_id=999, data="press")
 
         await callback_handler(cb, self.mock_bot)
-        cb.answer.assert_awaited_once_with("⛔ Access Denied (Няма доступу)", show_alert=True)
+        cb.answer.assert_awaited_once_with("⛔ Access Denied", show_alert=True)
 
     async def test_callback_handler_health_and_schedule(self):
         settings.allowed_users = {123}

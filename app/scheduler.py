@@ -153,21 +153,21 @@ class RandomScheduler:
 
     def format_telegram_status(self) -> str:
         st = self.get_status()
-        state_icon = "🟢 Актыўны" if (st["enabled"] and st["in_schedule_window"]) else ("🟡 Чакае акна" if st["enabled"] else "🔴 Адключаны")
-        workdays_str = "Панядзелак — Пятніца (Будні)" if st["workdays_only"] else "Кожны дзень"
+        state_icon = "🟢 Active" if (st["enabled"] and st["in_schedule_window"]) else ("🟡 Waiting for window" if st["enabled"] else "🔴 Inactive")
+        workdays_str = "Monday – Friday (Workdays only)" if st["workdays_only"] else "Every day (24/7)"
         min_m = st["min_interval_sec"]
         max_m = st["max_interval_sec"]
 
         return (
-            f"⏰ <b>Стан аўтаматычнага раскладу (Scheduler):</b>\n\n"
-            f"• <b>Статус:</b> {state_icon}\n"
-            f"• <b>Уключаны ў наладах:</b> {'Так' if st['enabled'] else 'Не'}\n"
-            f"• <b>Часавае акно:</b> <code>{st['schedule_window']}</code> ({st['timezone']})\n"
-            f"• <b>Дні:</b> {workdays_str}\n"
-            f"• <b>Інтэрвал рандому:</b> ад {min_m}с да {max_m}с (~{max_m // 60} хв)\n"
-            f"• <b>Цяперашні час:</b> <code>{st['current_time']}</code>\n"
-            f"• <b>Усяго націсканняў:</b> <b>{st['total_triggers']}</b>\n"
-            f"• <b>Апошняе націсканне:</b> <code>{st['last_trigger_time'] or 'яшчэ не было'}</code>"
+            f"⏰ <b>Workday Scheduler Status:</b>\n\n"
+            f"• <b>Status:</b> {state_icon}\n"
+            f"• <b>Config enabled:</b> {'Yes' if st['enabled'] else 'No'}\n"
+            f"• <b>Time Window:</b> <code>{st['schedule_window']}</code> ({st['timezone']})\n"
+            f"• <b>Active Days:</b> {workdays_str}\n"
+            f"• <b>Random Interval:</b> from {min_m}s to {max_m}s (~{max_m // 60} min)\n"
+            f"• <b>Current Time:</b> <code>{st['current_time']}</code>\n"
+            f"• <b>Total Presses:</b> <b>{st['total_triggers']}</b>\n"
+            f"• <b>Last Press:</b> <code>{st['last_trigger_time'] or 'None yet'}</code>"
         )
 
 
