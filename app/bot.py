@@ -15,19 +15,10 @@ dp = Dispatcher()
 
 
 async def is_user_authorized(bot: Bot, chat_id: int, user_id: int, chat_type: str = "private") -> bool:
-    """Check if a Telegram user is authorized to control the SwitchBot.
-
-    Authorization logic (BaseLinker bot style):
-    1. If user ID is in TELEGRAM_ALLOWED_USER_IDS, user is authorized anywhere.
-    2. If message is a channel post (chat_type == "channel" or user_id == 0 in negative chat_id):
-       In Telegram, ONLY channel administrators can publish channel posts.
-       If TELEGRAM_ALLOWED_CHAT_IDS is configured, verify chat_id in allowed_chats.
-       Otherwise allow.
-    3. If message/callback is from a group / supergroup:
-       Check if user_id in allowed_users OR if user is admin/creator in that group.
-    4. If no allowlists are configured, allow all (fail-open for simple setups).
-    5. Otherwise fail closed.
-    """
+    logger.info(
+        "Auth check: user_id=%s, chat_id=%s, chat_type=%s | allowed_users=%s, allowed_chats=%s",
+        user_id, chat_id, chat_type, settings.allowed_users, settings.allowed_chats
+    )
     if not settings.allowed_users and not settings.allowed_chats:
         return True
 
@@ -138,8 +129,16 @@ async def help_handler(message: types.Message, bot: Bot):
     chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
     chat_type = message.chat.type or "private"
+    logger.info("Received /help in chat_id=%s (%s, title=%r), from user_id=%s", chat_id, chat_type, message.chat.title, user_id)
 
     if not await is_user_authorized(bot, chat_id, user_id, chat_type):
+        await message.answer(
+            f"⛔ <b>Access Denied (Няма доступу)</b>\n"
+            f"ID гэтага чата: <code>{chat_id}</code> | Ваш User ID: <code>{user_id}</code>\n\n"
+            f"Каб даць доступ гэтаму каналу/групе, пазначце ў <code>.env</code>:\n"
+            f"<code>TELEGRAM_ALLOWED_CHAT_IDS={chat_id}</code>",
+            parse_mode="HTML"
+        )
         return
 
     text = (
