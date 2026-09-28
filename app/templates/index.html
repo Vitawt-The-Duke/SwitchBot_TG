@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SwitchBot Controller</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .container {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-family: monospace;
+      padding: 0.2rem 0.5rem;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .status-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      background: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--success);
+    }
+    .btn-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 0.85rem;
+      padding: 1rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      transition: all 0.15s ease-in-out;
+      color: white;
+      touch-action: manipulation;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-press {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+      padding: 1.25rem;
+      font-size: 1.25rem;
+    }
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+    .btn-on {
+      background: linear-gradient(135deg, #059669, #047857);
+      box-shadow: 0 4px 14px 0 rgba(5, 150, 105, 0.35);
+    }
+    .btn-off {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      box-shadow: 0 4px 14px 0 rgba(220, 38, 38, 0.35);
+    }
+    .btn-info {
+      background: #334155;
+      font-size: 0.95rem;
+      padding: 0.75rem;
+      color: var(--text-muted);
+    }
+    .btn-info:hover {
+      background: #475569;
+      color: var(--text);
+    }
+    .feedback {
+      margin-top: 1.25rem;
+      padding: 0.85rem;
+      border-radius: 0.75rem;
+      font-size: 0.85rem;
+      display: none;
+      word-break: break-word;
+    }
+    .feedback.success {
+      display: block;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .feedback.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+    .feedback.info {
+      display: block;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🤖 SwitchBot S1</h1>
+      <span class="badge">MAC: {{ mac }}</span>
+    </div>
+
+    <div class="status-card">
+      <div class="status-indicator">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Ready</span>
+      </div>
+      <span style="color: var(--text-muted); font-size: 0.8rem;">Pi 5 Gateway</span>
+    </div>
+
+    <div class="btn-grid">
+      <button class="btn btn-press" id="btnPress" onclick="sendAction('press')">
+        <span>🔘 PRESS BUTTON</span>
+      </button>
+
+      <div class="btn-row">
+        <button class="btn btn-on" id="btnOn" onclick="sendAction('on')">
+          <span>🟢 Turn ON</span>
+        </button>
+        <button class="btn btn-off" id="btnOff" onclick="sendAction('off')">
+          <span>🔴 Turn OFF</span>
+        </button>
+      </div>
+
+      <button class="btn btn-info" id="btnInfo" onclick="sendAction('info')">
+        <span>🔋 Check Status / Battery</span>
+      </button>
+    </div>
+
+    <div class="feedback" id="feedback"></div>
+  </div>
+
+  <script>
+    async function sendAction(action) {
+      const feedback = document.getElementById('feedback');
+      const statusText = document.getElementById('statusText');
+      const statusDot = document.getElementById('statusDot');
+      const buttons = document.querySelectorAll('.btn');
+
+      buttons.forEach(b => b.disabled = true);
+      statusText.innerText = 'Communicating via BLE...';
+      statusDot.style.background = '#f59e0b';
+      statusDot.style.boxShadow = '0 0 10px #f59e0b';
+
+      feedback.className = 'feedback info';
+      feedback.innerText = 'Connecting to SwitchBot and executing ' + action + '...';
+
+      try {
+        const response = await fetch('/api/' + action, {
+          method: action === 'info' ? 'GET' : 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          feedback.className = 'feedback success';
+          if (action === 'info' && result.data) {
+            feedback.innerText = 'Battery: ' + result.data.battery + '% | Firmware: ' + result.data.firmware + ' | Mode: ' + (result.data.switchMode ? 'Switch' : 'Press');
+          } else {
+            feedback.innerText = result.message || 'Operation successful!';
+          }
+          statusText.innerText = 'Online / Idle';
+          statusDot.style.background = '#10b981';
+          statusDot.style.boxShadow = '0 0 10px #10b981';
+        } else {
+          feedback.className = 'feedback error';
+          feedback.innerText = result.message || 'Action failed';
+          statusText.innerText = 'Error';
+          statusDot.style.background = '#ef4444';
+          statusDot.style.boxShadow = '0 0 10px #ef4444';
+        }
+      } catch (err) {
+        feedback.className = 'feedback error';
+        feedback.innerText = 'Network error contacting Raspberry Pi Gateway: ' + err.message;
+        statusText.innerText = 'Network Error';
+      } finally {
+        buttons.forEach(b => b.disabled = false);
+      }
+    }
+  </script>
+</body>
+</html>

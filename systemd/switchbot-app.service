@@ -1,0 +1,16 @@
+[Unit]
+Description=SwitchBot Web & Telegram Gateway
+After=network.target bluetooth.service switchbot-tune.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=igogo
+WorkingDirectory=/projects/SwitchBot_TG
+EnvironmentFile=-/projects/SwitchBot_TG/.env
+ExecStart=/home/igogo/switchbot-env/bin/python3 -m app.main
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

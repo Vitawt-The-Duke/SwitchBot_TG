@@ -1,0 +1,12 @@
+[Unit]
+Description=Tune Bluetooth LE parameters for SwitchBot stability
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/projects/SwitchBot_TG/scripts/tune_bluetooth.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
