@@ -65,6 +65,8 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         self.original_allowed_chats = settings.allowed_chats
         self.original_token = settings.telegram_bot_token
         self.original_scheduler_enabled = settings.scheduler_enabled
+        settings.allowed_users = set()
+        settings.allowed_chats = set()
         self.mock_bot = MagicMock()
 
     def tearDown(self):
