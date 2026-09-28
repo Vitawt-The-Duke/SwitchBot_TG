@@ -14,32 +14,43 @@ logger = logging.getLogger("telegram_bot")
 dp = Dispatcher()
 
 
-async def is_user_authorized(bot: Bot, chat_id: int, user_id: int) -> bool:
+async def is_user_authorized(bot: Bot, chat_id: int, user_id: int, chat_type: str = "private") -> bool:
     """Check if a Telegram user is authorized to control the SwitchBot.
 
     Authorization logic (BaseLinker bot style):
     1. If user ID is in TELEGRAM_ALLOWED_USER_IDS, user is authorized anywhere.
-    2. If message/callback is from an allowed group/channel (or any group where bot was added),
-       check if the user is an admin or creator in that chat.
-    3. If no allowlists are configured, allow all (fail-open for simple setups).
-    4. Otherwise fail closed.
+    2. If message is a channel post (chat_type == "channel" or user_id == 0 in negative chat_id):
+       In Telegram, ONLY channel administrators can publish channel posts.
+       If TELEGRAM_ALLOWED_CHAT_IDS is configured, verify chat_id in allowed_chats.
+       Otherwise allow.
+    3. If message/callback is from a group / supergroup:
+       Check if user_id in allowed_users OR if user is admin/creator in that group.
+    4. If no allowlists are configured, allow all (fail-open for simple setups).
+    5. Otherwise fail closed.
     """
     if not settings.allowed_users and not settings.allowed_chats:
         return True
 
-    if user_id in settings.allowed_users:
+    if user_id and user_id in settings.allowed_users:
         return True
 
-    # If chat is a group / supergroup
+    # Channel authorization
+    if chat_type == "channel" or (chat_id < 0 and user_id == 0):
+        if settings.allowed_chats:
+            return chat_id in settings.allowed_chats
+        return True
+
+    # Group / supergroup authorization
     if chat_id < 0:
         if settings.allowed_chats and chat_id not in settings.allowed_chats:
             return False
-        try:
-            member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
-            if member.status in ("creator", "administrator"):
-                return True
-        except Exception as e:
-            logger.warning("Could not fetch chat member status for user %s in %s: %s", user_id, chat_id, e)
+        if user_id > 0:
+            try:
+                member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+                if member.status in ("creator", "administrator"):
+                    return True
+            except Exception as e:
+                logger.warning("Could not fetch chat member status for user %s in %s: %s", user_id, chat_id, e)
 
     return False
 
@@ -61,7 +72,7 @@ def get_inline_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="🔘 Short Press", callback_data="press"),
-                InlineKeyboardButton(text="⏱️ Long Press", callback_data="long_press"),
+                InlineKeyboardButton(text="⏱️ Long Press (5s)", callback_data="long_press"),
             ],
             [
                 InlineKeyboardButton(text="🟢 Turn ON", callback_data="on"),
@@ -79,23 +90,32 @@ def get_inline_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def get_user_display_name(user: types.User | None) -> str:
-    if not user:
-        return "Unknown User"
-    if user.username:
-        return f"@{user.username}"
-    return user.full_name or str(user.id)
+def get_user_display_name(event: types.Message | types.CallbackQuery) -> tuple[int | str, str]:
+    user = event.from_user
+    if user:
+        name = f"@{user.username}" if user.username else (user.full_name or str(user.id))
+        return user.id, name
+
+    if isinstance(event, types.Message):
+        if event.sender_chat and event.sender_chat.title:
+            return f"channel_{event.chat.id}", f"📢 {event.sender_chat.title}"
+        if event.chat and event.chat.title:
+            return f"channel_{event.chat.id}", f"📢 {event.chat.title}"
+
+    return "channel_admin", "📢 Channel Admin"
 
 
 @dp.message(CommandStart())
+@dp.channel_post(CommandStart())
 async def start_handler(message: types.Message, bot: Bot):
     chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
 
-    if not await is_user_authorized(bot, chat_id, user_id):
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         await message.answer(
-            f"⛔ <b>Access Denied</b>\nВаш User ID: <code>{user_id}</code>\n"
-            f"Каб атрымаць доступ, папрасіце дадаць вас у спіс <code>TELEGRAM_ALLOWED_USER_IDS</code> ці зрабіць адмінам групы.",
+            f"⛔ <b>Access Denied</b>\nВаш User ID: <code>{user_id}</code> | Chat ID: <code>{chat_id}</code>\n"
+            f"Каб атрымаць доступ, дадайце User ID у <code>TELEGRAM_ALLOWED_USER_IDS</code> альбо ID гэтага чата ў <code>TELEGRAM_ALLOWED_CHAT_IDS</code>.",
             parse_mode="HTML"
         )
         return
@@ -103,17 +123,23 @@ async def start_handler(message: types.Message, bot: Bot):
     text = (
         f"👋 <b>SwitchBot Gateway Controller</b>\n\n"
         f"📍 <b>Device MAC:</b> <code>{settings.switchbot_mac}</code>\n"
-        f"🎮 Кіруйце девайсам праз кнопкі ніжэй альбо тэкставымі камандамі (/help):"
+        f"🎮 Кіруйце девайсам праз кнопкі альбо камандамі (/help):"
     )
-    await message.answer(text, parse_mode="HTML", reply_markup=get_reply_keyboard())
+    if chat_type == "channel":
+        await message.answer(text, parse_mode="HTML", reply_markup=get_inline_keyboard())
+    else:
+        await message.answer(text, parse_mode="HTML", reply_markup=get_reply_keyboard())
 
 
 @dp.message(Command("help"))
+@dp.channel_post(Command("help"))
 @dp.message(F.text == "❓ Help")
 async def help_handler(message: types.Message, bot: Bot):
     chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
-    if not await is_user_authorized(bot, chat_id, user_id):
+    chat_type = message.chat.type or "private"
+
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
 
     text = (
@@ -129,7 +155,7 @@ async def help_handler(message: types.Message, bot: Bot):
         "• <code>/history</code> — Журнал апошніх дзеянняў (хто націскаў)\n"
         "• <code>/schedule</code> — Стан рандомнага раскладу ў працоўны час\n"
         "• <code>/help</code> — Гэты спіс каманд\n\n"
-        "<i>Таксама можна выкарыстоўваць інлайн-кнопкі:</i>"
+        "<i>Інтэрактыўнае кіраванне кнопкамі ніжэй:</i>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_inline_keyboard())
 
@@ -138,11 +164,10 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
     msg_target = event if isinstance(event, types.Message) else event.message
     status_msg = await msg_target.answer(f"⏳ Сувязь са SwitchBot ({action})...")
 
-    user = event.from_user
-    user_id = user.id if user else 0
-    user_name = get_user_display_name(user)
-    chat_id = event.chat.id if isinstance(event, types.Message) else (event.message.chat.id if event.message else None)
-    chat_title = event.chat.title if isinstance(event, types.Message) else (event.message.chat.title if event.message else None)
+    user_id, user_name = get_user_display_name(event)
+    chat = event.chat if isinstance(event, types.Message) else (event.message.chat if event.message else None)
+    chat_id = chat.id if chat else None
+    chat_title = chat.title if chat else None
 
     if action == "press":
         res = await bot_client.press(duration=0)
@@ -160,7 +185,6 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
     success = res.get("success", False)
     msg_text = res.get("message", "")
 
-    # Record in audit history
     action_history.record(
         action=action,
         user_id=user_id,
@@ -194,19 +218,27 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
 
 @dp.message(F.text == "🔘 Short Press")
 @dp.message(Command("press"))
+@dp.channel_post(Command("press"))
 async def msg_press(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     await execute_and_respond(message, "press")
 
 
 @dp.message(F.text.startswith("⏱️ Long Press"))
 @dp.message(Command("longpress"))
+@dp.channel_post(Command("longpress"))
 @dp.message(Command("long_press"))
+@dp.channel_post(Command("long_press"))
 async def msg_long_press(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
-    # Check if duration parameter is passed: /longpress 10
     duration = 5
     if message.text:
         parts = message.text.split()
@@ -217,32 +249,48 @@ async def msg_long_press(message: types.Message, bot: Bot):
 
 @dp.message(F.text == "🟢 Turn ON")
 @dp.message(Command("on"))
+@dp.channel_post(Command("on"))
 async def msg_on(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     await execute_and_respond(message, "on")
 
 
 @dp.message(F.text == "🔴 Turn OFF")
 @dp.message(Command("off"))
+@dp.channel_post(Command("off"))
 async def msg_off(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     await execute_and_respond(message, "off")
 
 
 @dp.message(F.text == "🔋 Battery & State")
 @dp.message(Command("info"))
+@dp.channel_post(Command("info"))
 async def msg_info(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     await execute_and_respond(message, "info")
 
 
 @dp.message(F.text == "❤️ Health")
 @dp.message(Command("health"))
+@dp.channel_post(Command("health"))
 async def msg_health(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     stats = action_history.get_stats()
     sched = scheduler.get_status()
@@ -261,16 +309,24 @@ async def msg_health(message: types.Message, bot: Bot):
 
 @dp.message(F.text == "📜 Action History")
 @dp.message(Command("history"))
+@dp.channel_post(Command("history"))
 async def msg_history(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     text = action_history.format_telegram_history(limit=8)
     await message.answer(text, parse_mode="HTML")
 
 
 @dp.message(Command("schedule"))
+@dp.channel_post(Command("schedule"))
 async def msg_schedule(message: types.Message, bot: Bot):
-    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+    chat_id = message.chat.id
+    user_id = message.from_user.id if message.from_user else 0
+    chat_type = message.chat.type or "private"
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
     text = scheduler.format_telegram_status()
     await message.answer(text, parse_mode="HTML")
@@ -280,8 +336,9 @@ async def msg_schedule(message: types.Message, bot: Bot):
 async def callback_handler(callback: types.CallbackQuery, bot: Bot):
     chat_id = callback.message.chat.id if callback.message else 0
     user_id = callback.from_user.id if callback.from_user else 0
+    chat_type = callback.message.chat.type if callback.message else "private"
 
-    if not await is_user_authorized(bot, chat_id, user_id):
+    if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         await callback.answer("⛔ Access Denied (Няма доступу)", show_alert=True)
         return
 
@@ -322,13 +379,15 @@ async def run_bot():
     bot = Bot(token=settings.telegram_bot_token)
     logger.info("Starting Telegram Bot long-polling...")
 
-    # Launch scheduler task if enabled
     if settings.scheduler_enabled:
         logger.info("Starting background workday random scheduler...")
         scheduler.start_task()
 
     try:
-        await dp.start_polling(bot)
+        await dp.start_polling(
+            bot,
+            allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"]
+        )
     finally:
         scheduler.stop()
         await bot.session.close()

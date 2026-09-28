@@ -23,15 +23,24 @@ from app.bot import (
 )
 
 
-def make_message(user_id=123, username="testuser", chat_id=123, chat_title=None, text=""):
+def make_message(user_id=123, username="testuser", chat_id=123, chat_title=None, text="", chat_type="private"):
     msg = MagicMock(spec=types.Message)
     msg.chat = MagicMock()
     msg.chat.id = chat_id
     msg.chat.title = chat_title
-    msg.from_user = MagicMock()
-    msg.from_user.id = user_id
-    msg.from_user.username = username
-    msg.from_user.full_name = "Test User"
+    msg.chat.type = chat_type
+    if user_id:
+        msg.from_user = MagicMock()
+        msg.from_user.id = user_id
+        msg.from_user.username = username
+        msg.from_user.full_name = "Test User"
+    else:
+        msg.from_user = None
+    if chat_type == "channel":
+        msg.sender_chat = MagicMock()
+        msg.sender_chat.title = chat_title or "Test Channel"
+    else:
+        msg.sender_chat = None
     msg.text = text
     status_msg = MagicMock()
     status_msg.edit_text = AsyncMock()
@@ -39,14 +48,14 @@ def make_message(user_id=123, username="testuser", chat_id=123, chat_title=None,
     return msg
 
 
-def make_callback(user_id=123, username="testuser", chat_id=123, data="press"):
+def make_callback(user_id=123, username="testuser", chat_id=123, data="press", chat_type="private"):
     cb = MagicMock(spec=types.CallbackQuery)
     cb.answer = AsyncMock()
     cb.data = data
     cb.from_user = MagicMock()
     cb.from_user.id = user_id
     cb.from_user.username = username
-    cb.message = make_message(user_id=user_id, chat_id=chat_id)
+    cb.message = make_message(user_id=user_id, chat_id=chat_id, chat_type=chat_type)
     return cb
 
 
@@ -74,6 +83,14 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await is_user_authorized(self.mock_bot, chat_id=123, user_id=111))
         self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=123, user_id=999))
 
+    async def test_auth_channel(self):
+        settings.allowed_users = {111}
+        settings.allowed_chats = {-100429508213}
+        # In an allowed channel, user_id is 0 because messages are sent as channel
+        self.assertTrue(await is_user_authorized(self.mock_bot, chat_id=-100429508213, user_id=0, chat_type="channel"))
+        # In another channel not in allowed_chats
+        self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=-100999999999, user_id=0, chat_type="channel"))
+
     async def test_auth_group_admin(self):
         settings.allowed_users = {111}
         mock_member = MagicMock()
@@ -81,17 +98,17 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         self.mock_bot.get_chat_member = AsyncMock(return_value=mock_member)
 
         # User 999 is admin in group -10012345
-        self.assertTrue(await is_user_authorized(self.mock_bot, chat_id=-10012345, user_id=999))
+        self.assertTrue(await is_user_authorized(self.mock_bot, chat_id=-10012345, user_id=999, chat_type="supergroup"))
         self.mock_bot.get_chat_member.assert_awaited_once_with(chat_id=-10012345, user_id=999)
 
         # Regular member
         mock_member.status = "member"
-        self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=-10012345, user_id=999))
+        self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=-10012345, user_id=999, chat_type="supergroup"))
 
     async def test_auth_group_not_in_allowed_chats(self):
         settings.allowed_users = {111}
         settings.allowed_chats = {-1001111111111}
-        self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=-1009999999999, user_id=999))
+        self.assertFalse(await is_user_authorized(self.mock_bot, chat_id=-1009999999999, user_id=999, chat_type="group"))
 
     def test_keyboards(self):
         reply_kb = get_reply_keyboard()
@@ -123,6 +140,13 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         msg.answer.assert_awaited_once()
         self.assertIn("SwitchBot Gateway Controller", msg.answer.await_args.args[0])
 
+    async def test_start_handler_channel(self):
+        settings.allowed_chats = {-100429508213}
+        msg = make_message(user_id=0, chat_id=-100429508213, chat_type="channel")
+        await start_handler(msg, self.mock_bot)
+        msg.answer.assert_awaited_once()
+        self.assertIn("SwitchBot Gateway Controller", msg.answer.await_args.args[0])
+
     async def test_start_handler_denied(self):
         settings.allowed_users = {123}
         msg = make_message(user_id=999, chat_id=999)
@@ -137,6 +161,13 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
         msg.answer.assert_awaited_once()
         self.assertIn("/longpress", msg.answer.await_args.args[0])
         self.assertIn("/health", msg.answer.await_args.args[0])
+
+    async def test_help_handler_channel(self):
+        settings.allowed_chats = {-100429508213}
+        msg = make_message(user_id=0, chat_id=-100429508213, chat_type="channel", text="/help")
+        await help_handler(msg, self.mock_bot)
+        msg.answer.assert_awaited_once()
+        self.assertIn("/longpress", msg.answer.await_args.args[0])
 
     @patch("app.bot.bot_client.press", new_callable=AsyncMock)
     async def test_execute_and_respond_press(self, mock_press):
@@ -232,7 +263,10 @@ class TestBot(unittest.IsolatedAsyncioTestCase):
 
         await run_bot()
         mock_bot_cls.assert_called_once_with(token="fake_token_123")
-        mock_start_polling.assert_awaited_once_with(mock_bot_instance)
+        mock_start_polling.assert_awaited_once_with(
+            mock_bot_instance,
+            allowed_updates=["message", "edited_message", "channel_post", "edited_channel_post", "callback_query"]
+        )
         mock_bot_instance.session.close.assert_awaited_once()
 
     def test_main_without_token(self):
