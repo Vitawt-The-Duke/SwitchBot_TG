@@ -117,7 +117,7 @@ class RandomScheduler:
                 logger.info("Scheduler task cancelled.")
                 break
             except Exception as e:
-                logger.exception("Unexpected error in scheduler loop: %s", e)
+                logger.warning("Scheduler error (retrying in 10s): %s", e)
                 await asyncio.sleep(10)
 
         self._running = False

@@ -327,8 +327,30 @@ async def msg_schedule(message: types.Message, bot: Bot):
     chat_type = message.chat.type or "private"
     if not await is_user_authorized(bot, chat_id, user_id, chat_type):
         return
+
+    text_content = (message.text or "").strip().lower()
+    parts = text_content.split()
+    if len(parts) > 1:
+        subcmd = parts[1]
+        if subcmd in ["on", "start", "enable"]:
+            scheduler.enable()
+            await message.answer("🟢 Аўтаматычны расклад <b>уключаны</b>!", parse_mode="HTML")
+            return
+        elif subcmd in ["off", "stop", "disable"]:
+            scheduler.disable()
+            await message.answer("🔴 Аўтаматычны расклад <b>прыпынены</b>!", parse_mode="HTML")
+            return
+
     text = scheduler.format_telegram_status()
-    await message.answer(text, parse_mode="HTML")
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🟢 Уключыць", callback_data="sched_on"),
+                InlineKeyboardButton(text="🔴 Прыпыніць", callback_data="sched_off"),
+            ]
+        ]
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
 @dp.callback_query()
@@ -366,8 +388,24 @@ async def callback_handler(callback: types.CallbackQuery, bot: Bot):
             await callback.message.answer(text, parse_mode="HTML")
     elif data == "schedule":
         text = scheduler.format_telegram_status()
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🟢 Уключыць", callback_data="sched_on"),
+                    InlineKeyboardButton(text="🔴 Прыпыніць", callback_data="sched_off"),
+                ]
+            ]
+        )
         if callback.message:
-            await callback.message.answer(text, parse_mode="HTML")
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+    elif data == "sched_on":
+        scheduler.enable()
+        if callback.message:
+            await callback.message.answer("🟢 Аўтаматычны расклад <b>уключаны</b>!", parse_mode="HTML")
+    elif data == "sched_off":
+        scheduler.disable()
+        if callback.message:
+            await callback.message.answer("🔴 Аўтаматычны расклад <b>прыпынены</b>!", parse_mode="HTML")
 
 
 async def run_bot():

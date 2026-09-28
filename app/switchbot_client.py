@@ -57,7 +57,14 @@ class SwitchBotClient:
         async with self._lock:
             async with self.file_lock:
                 logger.info("Scanning for SwitchBot %s...", self.mac)
-                device = await BleakScanner.find_device_by_address(self.mac, timeout=10.0)
+                device = None
+                for attempt in range(2):
+                    device = await BleakScanner.find_device_by_address(self.mac, timeout=8.0)
+                    if device:
+                        break
+                    if attempt == 0:
+                        await asyncio.sleep(0.5)
+
                 if not device:
                     msg = f"Device {self.mac} not found in BLE scan. Ensure phone app is closed and device is nearby."
                     logger.warning(msg)
@@ -103,6 +110,16 @@ class SwitchBotClient:
                 except Exception as e:
                     logger.exception("Error during SwitchBot execution:")
                     return {"success": False, "message": f"BLE execution error: {str(e)}", "data": None}
+                finally:
+                    try:
+                        disc = getattr(bot, "_execute_forced_disconnect", None)
+                        if callable(disc):
+                            res_disc = disc()
+                            if asyncio.iscoroutine(res_disc):
+                                await res_disc
+                    except Exception as disc_err:
+                        logger.debug("Disconnect cleanup error: %s", disc_err)
+                    await asyncio.sleep(0.5)
 
     async def press(self, duration: int = 0) -> dict[str, Any]:
         """Short momentary press."""
