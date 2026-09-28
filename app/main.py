@@ -2,13 +2,11 @@ import asyncio
 import logging
 import uvicorn
 from app.config import settings
+from app.logger import setup_logging
 from app.web import app
 from app.bot import run_bot
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+setup_logging("switchbot-combined")
 logger = logging.getLogger("main")
 
 

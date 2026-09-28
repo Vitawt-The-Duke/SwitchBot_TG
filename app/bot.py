@@ -431,10 +431,8 @@ async def run_bot():
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
+    from app.logger import setup_logging
+    setup_logging("switchbot-bot")
     if not settings.telegram_bot_token:
         logger.warning("TELEGRAM_BOT_TOKEN is not configured! Please specify it in .env or environment.")
         return

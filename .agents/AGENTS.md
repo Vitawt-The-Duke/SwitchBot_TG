@@ -7,21 +7,23 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
 ```
 /projects/SwitchBot_TG/
 ├── app/
+│   ├── logger.py           # CompressedRotatingFileHandler (1MB, 4 gzip backups)
 │   ├── config.py           # Configuration loader (dataclass from .env / env vars)
 │   ├── switchbot_client.py # Async BLE client with short press, long press & FileLock
 │   ├── history.py          # ActionHistory audit logger (tracks user_id, action, result)
-│   ├── scheduler.py        # Random workday scheduler (interval 1s-420s between 09:00-17:00)
+│   ├── scheduler.py        # Random workday scheduler (interval 60s-420s between 09:00-17:00)
 │   ├── web.py              # FastAPI application + HTML endpoints (standalone runner via `python -m app.web`)
 │   ├── bot.py              # Aiogram 3.x Telegram bot handlers with group admin authorization
 │   ├── main.py             # Combined Uvicorn + Aiogram async runner
 │   └── templates/
 │       └── index.html      # Mobile-first dark-mode Web UI with history & diagnostics
+├── logs/                   # Rotating logs: switchbot-bot.log, switchbot-web.log, actions.log
 ├── tests/
 │   ├── test_config.py           # Config parsing & allowed users tests
 │   ├── test_web.py              # FastAPI endpoint tests
 │   ├── test_bot.py              # Aiogram handlers & keyboards tests
 │   ├── test_switchbot_client.py # SwitchBotClient & FileLock tests
-│   ├── test_history.py          # ActionHistory audit logger tests
+│   ├── test_history.py          # ActionHistory audit logger & rotation tests
 │   └── test_scheduler.py        # RandomScheduler window and interval tests
 ├── scripts/
 │   ├── tune_bluetooth.sh   # Sets BLE kernel parameters (supervision_timeout=3000ms)
@@ -48,6 +50,9 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
 
 4. **BLE Locking (Process & Thread Safety)**:
    Never invoke simultaneous BLE operations. `switchbot_client.py` uses `asyncio.Lock()` for intra-process serialization and an inter-process `FileLock` (`fcntl.flock` on `/tmp/switchbot_ble.lock`) to serialize calls across independent processes (e.g. `switchbot-web.service` and `switchbot-bot.service`).
+
+5. **File Logging & Gzip Rotation**:
+   Both services (`switchbot-bot` and `switchbot-web`) plus `ActionHistory` log to `logs/` (`switchbot-bot.log`, `switchbot-web.log`, `actions.log`). Files automatically rotate when exceeding 1 MB (`LOG_MAX_BYTES=1048576`), compressing into up to 4 `.gz` archives (`LOG_BACKUP_COUNT=4`) to protect SD card / disk space on Raspberry Pi.
 
 ---
 

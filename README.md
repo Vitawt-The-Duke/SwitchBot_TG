@@ -111,10 +111,15 @@ SCHEDULER_ENABLED=false
 SCHEDULER_START_HOUR=9
 SCHEDULER_END_HOUR=17
 SCHEDULER_WORKDAYS_ONLY=true
-SCHEDULER_MIN_INTERVAL_SEC=1
+SCHEDULER_MIN_INTERVAL_SEC=60
 SCHEDULER_MAX_INTERVAL_SEC=420
 SCHEDULER_ACTION=press
 SCHEDULER_TIMEZONE=Europe/Warsaw
+
+# Logging & Rotation (1 MB max per file, 4 .gz backups)
+LOG_DIR=logs
+LOG_MAX_BYTES=1048576
+LOG_BACKUP_COUNT=4
 ```
 
 ### Step 5: Test via Command Line
@@ -147,13 +152,27 @@ This installs and starts independent services:
 - `switchbot-bot.service` (Telegram Bot daemon)
 - `switchbot-tune.service` (BLE kernel parameter tuning)
 
-Inspect service logs individually:
-```bash
-# Web UI logs
-sudo journalctl -u switchbot-web.service -f
+### Step 7: Logs & Automatic Rotation
 
-# Telegram Bot logs
+All services write both to systemd journal and to persistent rotating log files in `logs/`:
+- `logs/switchbot-bot.log` — Telegram bot daemon log.
+- `logs/switchbot-web.log` — Web dashboard and REST API gateway log.
+- `logs/actions.log` — Action history audit log (persisted and reloaded across restarts).
+
+**Rotation policy:**
+- Files rotate when reaching **1 MB** (`LOG_MAX_BYTES=1048576`).
+- Rotated files are automatically compressed into **`.gz` archives** (`.1.gz`, `.2.gz`, `.3.gz`, `.4.gz`).
+- Keeps **4** compressed backup archives (`LOG_BACKUP_COUNT=4`).
+
+Inspect logs in real-time:
+```bash
+# View file logs
+tail -f logs/switchbot-bot.log
+tail -f logs/actions.log
+
+# View systemd journal
 sudo journalctl -u switchbot-bot.service -f
+sudo journalctl -u switchbot-web.service -f
 ```
 
 ---

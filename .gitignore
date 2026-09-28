@@ -4,6 +4,8 @@ __pycache__/
 *.so
 .env
 *.log
+*.log.*
+logs/
 .venv/
 venv/
 switchbot-env/

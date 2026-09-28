@@ -84,6 +84,11 @@ class Settings:
     scheduler_action: str = os.getenv("SCHEDULER_ACTION", "press").strip()
     scheduler_timezone: str = os.getenv("SCHEDULER_TIMEZONE", "Europe/Warsaw").strip()
 
+    # Logging and rotation settings (1 MB max size, 4 .gz backups)
+    log_dir: str = os.getenv("LOG_DIR", "logs").strip()
+    log_max_bytes: int = env_int("LOG_MAX_BYTES", 1024 * 1024)  # 1 MB
+    log_backup_count: int = env_int("LOG_BACKUP_COUNT", 4)  # 4 gz archives
+
     allowed_users: set[int] = field(default_factory=set)
     allowed_chats: set[int] = field(default_factory=set)
 

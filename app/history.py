@@ -1,8 +1,14 @@
+import os
+import json
 import time
+import logging
 from collections import deque
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any
+
+from app.config import settings
+from app.logger import CompressedRotatingFileHandler
 
 
 @dataclass
@@ -20,15 +26,65 @@ class ActionRecord:
 
 
 class ActionHistory:
-    def __init__(self, max_size: int = 100):
+    def __init__(self, max_size: int = 100, log_file: str | None = None):
         self._max_size = max_size
         self._records: deque[ActionRecord] = deque(maxlen=max_size)
         self._counter: int = 0
         self._start_time: float = time.time()
 
+        if log_file == "":
+            self._log_file = None
+        elif log_file is not None:
+            self._log_file = log_file
+        else:
+            self._log_file = os.path.join(settings.log_dir, "actions.log")
+
+        self._file_handler: CompressedRotatingFileHandler | None = None
+        if self._log_file:
+            os.makedirs(os.path.dirname(os.path.abspath(self._log_file)), exist_ok=True)
+            self._file_handler = CompressedRotatingFileHandler(
+                self._log_file,
+                maxBytes=settings.log_max_bytes,
+                backupCount=settings.log_backup_count,
+                encoding="utf-8",
+            )
+            self._file_handler.setFormatter(logging.Formatter("%(message)s"))
+            self._load_persisted_records()
+
+    def close(self):
+        if self._file_handler:
+            try:
+                self._file_handler.close()
+            except Exception:
+                pass
+
     @property
     def uptime_seconds(self) -> int:
         return int(time.time() - self._start_time)
+
+    def _load_persisted_records(self):
+        if not self._log_file or not os.path.exists(self._log_file):
+            return
+        try:
+            with open(self._log_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            records = []
+            for line in lines[-self._max_size:]:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    rec = ActionRecord(**data)
+                    records.append(rec)
+                    if rec.id > self._counter:
+                        self._counter = rec.id
+                except Exception:
+                    pass
+            for rec in records:
+                self._records.appendleft(rec)
+        except Exception:
+            pass
 
     def record(
         self,
@@ -55,6 +111,23 @@ class ActionHistory:
             message=message,
         )
         self._records.appendleft(record)
+
+        if self._file_handler:
+            try:
+                line = json.dumps(asdict(record), ensure_ascii=False)
+                record_entry = logging.LogRecord(
+                    name="actions",
+                    level=logging.INFO,
+                    pathname="",
+                    lineno=0,
+                    msg=line,
+                    args=(),
+                    exc_info=None,
+                )
+                self._file_handler.emit(record_entry)
+            except Exception:
+                pass
+
         return record
 
     def get_recent(self, limit: int = 10) -> list[dict[str, Any]]:
