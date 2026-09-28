@@ -92,12 +92,29 @@ SWITCHBOT_PASSWORD=your_password_here
 # Telegram Bot Token from @BotFather (optional, leave empty if Web UI only)
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxyz
 
-# Comma-separated list of allowed Telegram user IDs (optional security restriction)
-TELEGRAM_ALLOWED_USERS=123456789,987654321
+# Comma-separated list of allowed Telegram user IDs (e.g. 123456789, 987654321)
+TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
+
+# Optional: comma-separated allowed group/channel chat IDs (e.g. -1001234567890)
+# Group administrators in these chats automatically get control access!
+TELEGRAM_ALLOWED_CHAT_IDS=
 
 # Web Server settings
 WEB_HOST=0.0.0.0
 WEB_PORT=8085
+
+# Inter-process BLE Lock file
+BLE_LOCK_FILE=/tmp/switchbot_ble.lock
+
+# Random Workday Scheduler (Auto-presser)
+SCHEDULER_ENABLED=false
+SCHEDULER_START_HOUR=9
+SCHEDULER_END_HOUR=17
+SCHEDULER_WORKDAYS_ONLY=true
+SCHEDULER_MIN_INTERVAL_SEC=1
+SCHEDULER_MAX_INTERVAL_SEC=420
+SCHEDULER_ACTION=press
+SCHEDULER_TIMEZONE=Europe/Warsaw
 ```
 
 ### Step 5: Test via Command Line
@@ -141,16 +158,38 @@ sudo journalctl -u switchbot-bot.service -f
 
 ---
 
+## ✈️ Telegram Bot Commands & Channel Polling
+
+The bot supports both private chats and group/channel chats:
+- **Group/Channel Admin Authorization**: If the bot is added to a group or channel, all chat administrators automatically have permission to trigger actions and view diagnostics.
+- **Whitelist Security**: Direct control restricted to `TELEGRAM_ALLOWED_USER_IDS` or chat admins.
+
+### Bot Commands:
+- `/press`: 🔘 Short momentary press (0s)
+- `/longpress [sec]`: ⏱️ Long press (holds arm down for specified seconds, default 5s)
+- `/on`: 🟢 Turn device switch ON
+- `/off`: 🔴 Turn device switch OFF
+- `/info`: 🔋 Battery percentage, firmware and mode
+- `/health`: ❤️ Gateway health, uptime, lock state, and action counters
+- `/history`: 📜 Action audit log showing the last actions and which user triggered them
+- `/schedule`: ⏰ Workday random scheduler status and countdown
+- `/help`: ❓ Full commands overview and interactive buttons
+
+---
+
 ## 🌐 Web Dashboard & REST API
 
 Open your browser at `http://<raspberry-pi-ip>:8085`.
 
 ### API Endpoints:
-- `POST /api/press`: Triggers bot press.
+- `POST /api/press`: Triggers short press.
+- `POST /api/longpress?duration=5`: Triggers long press with hold duration.
 - `POST /api/on`: Triggers switch ON.
 - `POST /api/off`: Triggers switch OFF.
 - `GET /api/info`: Returns battery % and firmware info.
-- `GET /api/health`: Healthcheck endpoint.
+- `GET /api/health`: Health diagnostics and scheduler status.
+- `GET /api/history`: Audit log of recent actions.
+- `GET /api/schedule`: Workday scheduler status.
 
 ---
 

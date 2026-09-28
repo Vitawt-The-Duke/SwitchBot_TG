@@ -16,6 +16,7 @@
       --success: #10b981;
       --danger: #ef4444;
       --warning: #f59e0b;
+      --indigo: #6366f1;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     body {
@@ -30,7 +31,7 @@
     }
     .container {
       width: 100%;
-      max-width: 440px;
+      max-width: 460px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 1.25rem;
@@ -39,7 +40,7 @@
     }
     .header {
       text-align: center;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
     .header h1 {
       font-size: 1.5rem;
@@ -66,7 +67,7 @@
       border: 1px solid var(--card-border);
       border-radius: 0.75rem;
       padding: 0.75rem 1rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
       font-size: 0.85rem;
       display: flex;
       align-items: center;
@@ -87,20 +88,20 @@
     .btn-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
+      gap: 0.75rem;
     }
     .btn {
       width: 100%;
       border: none;
       border-radius: 0.85rem;
-      padding: 1rem;
-      font-size: 1.1rem;
+      padding: 0.95rem;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.6rem;
+      gap: 0.5rem;
       transition: all 0.15s ease-in-out;
       color: white;
       touch-action: manipulation;
@@ -113,16 +114,18 @@
       cursor: not-allowed;
       transform: none;
     }
-    .btn-press {
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
-      padding: 1.25rem;
-      font-size: 1.25rem;
-    }
     .btn-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.85rem;
+      gap: 0.75rem;
+    }
+    .btn-press {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.35);
+    }
+    .btn-longpress {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.35);
     }
     .btn-on {
       background: linear-gradient(135deg, #059669, #047857);
@@ -132,15 +135,14 @@
       background: linear-gradient(135deg, #dc2626, #b91c1c);
       box-shadow: 0 4px 14px 0 rgba(220, 38, 38, 0.35);
     }
-    .btn-info {
+    .btn-secondary {
       background: #334155;
-      font-size: 0.95rem;
-      padding: 0.75rem;
-      color: var(--text-muted);
-    }
-    .btn-info:hover {
-      background: #475569;
+      font-size: 0.88rem;
+      padding: 0.7rem;
       color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #475569;
     }
     .feedback {
       margin-top: 1.25rem;
@@ -149,6 +151,7 @@
       font-size: 0.85rem;
       display: none;
       word-break: break-word;
+      line-height: 1.4;
     }
     .feedback.success {
       display: block;
@@ -168,27 +171,47 @@
       border: 1px solid rgba(59, 130, 246, 0.4);
       color: #60a5fa;
     }
+    .history-box {
+      margin-top: 1rem;
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      font-size: 0.78rem;
+      max-height: 180px;
+      overflow-y: auto;
+      display: none;
+    }
+    .history-item {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #1e293b;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🤖 SwitchBot S1</h1>
+      <h1>🤖 SwitchBot S1 Gateway</h1>
       <span class="badge">MAC: {{ mac }}</span>
     </div>
 
     <div class="status-card">
       <div class="status-indicator">
         <div class="dot" id="statusDot"></div>
-        <span id="statusText">Ready</span>
+        <span id="statusText">Ready / Idle</span>
       </div>
       <span style="color: var(--text-muted); font-size: 0.8rem;">Pi 5 Gateway</span>
     </div>
 
     <div class="btn-grid">
-      <button class="btn btn-press" id="btnPress" onclick="sendAction('press')">
-        <span>🔘 PRESS BUTTON</span>
-      </button>
+      <div class="btn-row">
+        <button class="btn btn-press" id="btnPress" onclick="sendAction('press')">
+          <span>🔘 Short Press</span>
+        </button>
+        <button class="btn btn-longpress" id="btnLongPress" onclick="sendAction('longpress')">
+          <span>⏱️ Long (5s)</span>
+        </button>
+      </div>
 
       <div class="btn-row">
         <button class="btn btn-on" id="btnOn" onclick="sendAction('on')">
@@ -199,12 +222,22 @@
         </button>
       </div>
 
-      <button class="btn btn-info" id="btnInfo" onclick="sendAction('info')">
-        <span>🔋 Check Status / Battery</span>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btnInfo" onclick="sendAction('info')">
+          <span>🔋 Battery & Info</span>
+        </button>
+        <button class="btn btn-secondary" id="btnHealth" onclick="loadHealth()">
+          <span>❤️ Health Check</span>
+        </button>
+      </div>
+
+      <button class="btn btn-secondary" id="btnHistory" onclick="toggleHistory()">
+        <span>📜 Action History & Logs</span>
       </button>
     </div>
 
     <div class="feedback" id="feedback"></div>
+    <div class="history-box" id="historyBox"></div>
   </div>
 
   <script>
@@ -220,7 +253,7 @@
       statusDot.style.boxShadow = '0 0 10px #f59e0b';
 
       feedback.className = 'feedback info';
-      feedback.innerText = 'Connecting to SwitchBot and executing ' + action + '...';
+      feedback.innerText = 'Executing ' + action + '...';
 
       try {
         const response = await fetch('/api/' + action, {
@@ -232,7 +265,7 @@
         if (result.success) {
           feedback.className = 'feedback success';
           if (action === 'info' && result.data) {
-            feedback.innerText = 'Battery: ' + result.data.battery + '% | Firmware: ' + result.data.firmware + ' | Mode: ' + (result.data.switchMode ? 'Switch' : 'Press');
+            feedback.innerText = 'Battery: ' + result.data.battery + '% | Firmware: ' + result.data.firmware + ' | Mode: ' + (result.data.switchMode ? 'Switch' : 'Press') + ' | Hold: ' + (result.data.holdSeconds || 0) + 's';
           } else {
             feedback.innerText = result.message || 'Operation successful!';
           }
@@ -248,10 +281,52 @@
         }
       } catch (err) {
         feedback.className = 'feedback error';
-        feedback.innerText = 'Network error contacting Raspberry Pi Gateway: ' + err.message;
+        feedback.innerText = 'Network error: ' + err.message;
         statusText.innerText = 'Network Error';
       } finally {
         buttons.forEach(b => b.disabled = false);
+      }
+    }
+
+    async function loadHealth() {
+      const feedback = document.getElementById('feedback');
+      try {
+        const res = await fetch('/api/health');
+        const d = await res.json();
+        feedback.className = 'feedback info';
+        feedback.innerHTML = `<b>❤️ Gateway Health:</b> ${d.status.toUpperCase()}<br>
+          • Uptime: ${d.uptime_seconds}s | Actions: ${d.total_actions}<br>
+          • Scheduler: ${d.scheduler.enabled ? '🟢 Enabled' : '🔴 Disabled'} (${d.scheduler.schedule_window})<br>
+          • Lock File: <code>${d.ble_lock_file}</code>`;
+      } catch (e) {
+        feedback.className = 'feedback error';
+        feedback.innerText = 'Health check failed: ' + e.message;
+      }
+    }
+
+    async function toggleHistory() {
+      const box = document.getElementById('historyBox');
+      if (box.style.display === 'block') {
+        box.style.display = 'none';
+        return;
+      }
+      try {
+        const res = await fetch('/api/history?limit=10');
+        const data = await res.json();
+        if (!data.history || data.history.length === 0) {
+          box.innerHTML = '<div style="color: var(--text-muted);">No actions recorded yet.</div>';
+        } else {
+          box.innerHTML = data.history.map(h => `
+            <div class="history-item">
+              <b>${h.action.toUpperCase()}</b> by <i>${h.user_name}</i> (${h.success ? '✅' : '❌'})<br>
+              <span style="color: var(--text-muted); font-size: 0.72rem;">${h.time_str} | ${h.message}</span>
+            </div>
+          `).join('');
+        }
+        box.style.display = 'block';
+      } catch (e) {
+        box.innerHTML = '<div style="color: var(--danger);">Failed loading history: ' + e.message + '</div>';
+        box.style.display = 'block';
       }
     }
   </script>

@@ -12,6 +12,8 @@ class TestWeb(unittest.TestCase):
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
+        self.assertIn("scheduler", response.json())
+        self.assertIn("uptime_seconds", response.json())
 
     @patch("app.web.bot_client.press", new_callable=AsyncMock)
     def test_api_press(self, mock_press):
@@ -20,6 +22,25 @@ class TestWeb(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         mock_press.assert_awaited_once()
+
+    @patch("app.web.bot_client.long_press", new_callable=AsyncMock)
+    def test_api_long_press(self, mock_long_press):
+        mock_long_press.return_value = {"success": True, "message": "Action long_press executed successfully!"}
+        response = self.client.post("/api/longpress?duration=5")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        mock_long_press.assert_awaited_once_with(duration=5)
+
+    def test_api_history(self):
+        response = self.client.get("/api/history")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("history", response.json())
+        self.assertIn("stats", response.json())
+
+    def test_api_schedule(self):
+        response = self.client.get("/api/schedule")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("enabled", response.json())
 
     @patch("app.web.bot_client.turn_on", new_callable=AsyncMock)
     def test_api_on(self, mock_on):

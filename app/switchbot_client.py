@@ -53,7 +53,7 @@ class SwitchBotClient:
         self._lock = asyncio.Lock()
         self.file_lock = FileLock(lock_path or settings.ble_lock_file)
 
-    async def _execute_action(self, action_name: str) -> dict[str, Any]:
+    async def _execute_action(self, action_name: str, **kwargs: Any) -> dict[str, Any]:
         async with self._lock:
             async with self.file_lock:
                 logger.info("Scanning for SwitchBot %s...", self.mac)
@@ -68,6 +68,19 @@ class SwitchBotClient:
 
                 try:
                     if action_name == "press":
+                        duration = kwargs.get("duration", 0)
+                        if duration > 0:
+                            try:
+                                await bot.set_long_press(duration)
+                            except Exception as e:
+                                logger.debug("set_long_press error: %s", e)
+                        res = await bot.press()
+                    elif action_name == "long_press":
+                        duration = kwargs.get("duration", 5)
+                        try:
+                            await bot.set_long_press(duration)
+                        except Exception as e:
+                            logger.warning("Failed setting long press duration: %s", e)
                         res = await bot.press()
                     elif action_name == "on":
                         res = await bot.turn_on()
@@ -91,8 +104,13 @@ class SwitchBotClient:
                     logger.exception("Error during SwitchBot execution:")
                     return {"success": False, "message": f"BLE execution error: {str(e)}", "data": None}
 
-    async def press(self) -> dict[str, Any]:
-        return await self._execute_action("press")
+    async def press(self, duration: int = 0) -> dict[str, Any]:
+        """Short momentary press."""
+        return await self._execute_action("press", duration=duration)
+
+    async def long_press(self, duration: int = 5) -> dict[str, Any]:
+        """Long press holding arm down for duration seconds (default 5s)."""
+        return await self._execute_action("long_press", duration=duration)
 
     async def turn_on(self) -> dict[str, Any]:
         return await self._execute_action("on")

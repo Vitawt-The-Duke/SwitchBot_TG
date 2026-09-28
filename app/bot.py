@@ -6,24 +6,51 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 
 from app.config import settings
 from app.switchbot_client import bot_client
+from app.history import action_history
+from app.scheduler import scheduler
 
 logger = logging.getLogger("telegram_bot")
 
 dp = Dispatcher()
 
 
-def is_user_allowed(user_id: int) -> bool:
-    if not settings.allowed_users:
+async def is_user_authorized(bot: Bot, chat_id: int, user_id: int) -> bool:
+    """Check if a Telegram user is authorized to control the SwitchBot.
+
+    Authorization logic (BaseLinker bot style):
+    1. If user ID is in TELEGRAM_ALLOWED_USER_IDS, user is authorized anywhere.
+    2. If message/callback is from an allowed group/channel (or any group where bot was added),
+       check if the user is an admin or creator in that chat.
+    3. If no allowlists are configured, allow all (fail-open for simple setups).
+    4. Otherwise fail closed.
+    """
+    if not settings.allowed_users and not settings.allowed_chats:
         return True
-    return user_id in settings.allowed_users
+
+    if user_id in settings.allowed_users:
+        return True
+
+    # If chat is a group / supergroup
+    if chat_id < 0:
+        if settings.allowed_chats and chat_id not in settings.allowed_chats:
+            return False
+        try:
+            member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            if member.status in ("creator", "administrator"):
+                return True
+        except Exception as e:
+            logger.warning("Could not fetch chat member status for user %s in %s: %s", user_id, chat_id, e)
+
+    return False
 
 
 def get_reply_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🔘 Press")],
+            [KeyboardButton(text="🔘 Short Press"), KeyboardButton(text="⏱️ Long Press (5s)")],
             [KeyboardButton(text="🟢 Turn ON"), KeyboardButton(text="🔴 Turn OFF")],
-            [KeyboardButton(text="🔋 Status & Battery")],
+            [KeyboardButton(text="🔋 Battery & State"), KeyboardButton(text="❤️ Health")],
+            [KeyboardButton(text="📜 Action History"), KeyboardButton(text="❓ Help")],
         ],
         resize_keyboard=True,
     )
@@ -32,53 +59,95 @@ def get_reply_keyboard() -> ReplyKeyboardMarkup:
 def get_inline_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔘 Press Bot", callback_data="press")],
             [
-                InlineKeyboardButton(text="🟢 On", callback_data="on"),
-                InlineKeyboardButton(text="🔴 Off", callback_data="off"),
+                InlineKeyboardButton(text="🔘 Short Press", callback_data="press"),
+                InlineKeyboardButton(text="⏱️ Long Press", callback_data="long_press"),
             ],
-            [InlineKeyboardButton(text="🔋 Status / Battery", callback_data="info")],
+            [
+                InlineKeyboardButton(text="🟢 Turn ON", callback_data="on"),
+                InlineKeyboardButton(text="🔴 Turn OFF", callback_data="off"),
+            ],
+            [
+                InlineKeyboardButton(text="🔋 Device Info", callback_data="info"),
+                InlineKeyboardButton(text="❤️ Health", callback_data="health"),
+            ],
+            [
+                InlineKeyboardButton(text="📜 Action History", callback_data="history"),
+                InlineKeyboardButton(text="⏰ Scheduler", callback_data="schedule"),
+            ],
         ]
     )
 
 
+def get_user_display_name(user: types.User | None) -> str:
+    if not user:
+        return "Unknown User"
+    if user.username:
+        return f"@{user.username}"
+    return user.full_name or str(user.id)
+
+
 @dp.message(CommandStart())
-async def start_handler(message: types.Message):
+async def start_handler(message: types.Message, bot: Bot):
+    chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
-    if not is_user_allowed(user_id):
-        await message.answer(f"⛔ Access Denied. Your Telegram User ID: <code>{user_id}</code>", parse_mode="HTML")
+
+    if not await is_user_authorized(bot, chat_id, user_id):
+        await message.answer(
+            f"⛔ <b>Access Denied</b>\nВаш User ID: <code>{user_id}</code>\n"
+            f"Каб атрымаць доступ, папрасіце дадаць вас у спіс <code>TELEGRAM_ALLOWED_USER_IDS</code> ці зрабіць адмінам групы.",
+            parse_mode="HTML"
+        )
         return
 
     text = (
-        f"👋 <b>SwitchBot Controller Bot</b>\n\n"
+        f"👋 <b>SwitchBot Gateway Controller</b>\n\n"
         f"📍 <b>Device MAC:</b> <code>{settings.switchbot_mac}</code>\n"
-        f"🎮 Choose an action using the buttons below:"
+        f"🎮 Кіруйце девайсам праз кнопкі ніжэй альбо тэкставымі камандамі (/help):"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_reply_keyboard())
 
 
 @dp.message(Command("help"))
-async def help_handler(message: types.Message):
+@dp.message(F.text == "❓ Help")
+async def help_handler(message: types.Message, bot: Bot):
+    chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
-    if not is_user_allowed(user_id):
+    if not await is_user_authorized(bot, chat_id, user_id):
         return
+
     text = (
-        "Commands:\n"
-        "/start - Show control keyboard\n"
-        "/press - Execute Press\n"
-        "/on - Turn On\n"
-        "/off - Turn Off\n"
-        "/info - Check battery and state"
+        "🤖 <b>Даведка па камандах SwitchBot:</b>\n\n"
+        "🔘 <b>Кіраванне прыладай:</b>\n"
+        "• <code>/press</code> — Кароткатэрміновы націск (Short Press)\n"
+        "• <code>/longpress [сек]</code> — Доўгатэрміновы націск (Long Press, дэфолт: 5 сек)\n"
+        "• <code>/on</code> — Перавесці перамыкач у стан ON\n"
+        "• <code>/off</code> — Перавесці перамыкач у стан OFF\n"
+        "• <code>/info</code> — Запыт інфармацыі і зараду батарэі\n\n"
+        "📊 <b>Маніторынг і сэрвіс:</b>\n"
+        "• <code>/health</code> — Стан сэрвісаў, шлюза і Bluetooth\n"
+        "• <code>/history</code> — Журнал апошніх дзеянняў (хто націскаў)\n"
+        "• <code>/schedule</code> — Стан рандомнага раскладу ў працоўны час\n"
+        "• <code>/help</code> — Гэты спіс каманд\n\n"
+        "<i>Таксама можна выкарыстоўваць інлайн-кнопкі:</i>"
     )
-    await message.answer(text)
+    await message.answer(text, parse_mode="HTML", reply_markup=get_inline_keyboard())
 
 
-async def execute_and_respond(event: types.Message | types.CallbackQuery, action: str):
+async def execute_and_respond(event: types.Message | types.CallbackQuery, action: str, duration: int = 5):
     msg_target = event if isinstance(event, types.Message) else event.message
-    status_msg = await msg_target.answer(f"⏳ Communicating with SwitchBot ({action})...")
+    status_msg = await msg_target.answer(f"⏳ Сувязь са SwitchBot ({action})...")
+
+    user = event.from_user
+    user_id = user.id if user else 0
+    user_name = get_user_display_name(user)
+    chat_id = event.chat.id if isinstance(event, types.Message) else (event.message.chat.id if event.message else None)
+    chat_title = event.chat.title if isinstance(event, types.Message) else (event.message.chat.title if event.message else None)
 
     if action == "press":
-        res = await bot_client.press()
+        res = await bot_client.press(duration=0)
+    elif action == "long_press":
+        res = await bot_client.long_press(duration=duration)
     elif action == "on":
         res = await bot_client.turn_on()
     elif action == "off":
@@ -86,77 +155,182 @@ async def execute_and_respond(event: types.Message | types.CallbackQuery, action
     elif action == "info":
         res = await bot_client.get_info()
     else:
-        res = {"success": False, "message": f"Unknown action: {action}"}
+        res = {"success": False, "message": f"Невядомае дзеянне: {action}"}
 
-    if res["success"]:
+    success = res.get("success", False)
+    msg_text = res.get("message", "")
+
+    # Record in audit history
+    action_history.record(
+        action=action,
+        user_id=user_id,
+        user_name=user_name,
+        chat_id=chat_id,
+        chat_title=chat_title,
+        success=success,
+        message=msg_text,
+    )
+
+    if success:
         if action == "info" and res.get("data"):
             d = res["data"]
-            mode_str = "Switch Mode" if d.get("switchMode") else "Press Mode"
+            mode_str = "Перамыкач (Switch)" if d.get("switchMode") else "Кнопка (Press)"
             text = (
-                f"✅ <b>Device Status</b>\n"
-                f"🔋 Battery: <b>{d.get('battery')}%</b>\n"
-                f"⚙️ Firmware: {d.get('firmware')}\n"
-                f"📌 Mode: {mode_str}"
+                f"✅ <b>Стан SwitchBot</b>\n"
+                f"🔋 Батарэя: <b>{d.get('battery')}%</b>\n"
+                f"⚙️ Прашыўка: {d.get('firmware')}\n"
+                f"📌 Рэжым: {mode_str}\n"
+                f"⏱️ Націск: {d.get('holdSeconds', 0)} сек"
             )
+        elif action == "long_press":
+            text = f"✅ Паспяховы доўгі націск ({duration} сек)!"
         else:
-            text = f"✅ {res['message']}"
+            text = f"✅ {msg_text}"
     else:
-        text = f"❌ {res['message']}"
+        text = f"❌ Памылка: {msg_text}"
 
     await status_msg.edit_text(text, parse_mode="HTML")
 
 
-@dp.message(F.text == "🔘 Press")
+@dp.message(F.text == "🔘 Short Press")
 @dp.message(Command("press"))
-async def msg_press(message: types.Message):
-    if not is_user_allowed(message.from_user.id):
+async def msg_press(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
         return
     await execute_and_respond(message, "press")
 
 
+@dp.message(F.text.startswith("⏱️ Long Press"))
+@dp.message(Command("longpress"))
+@dp.message(Command("long_press"))
+async def msg_long_press(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+        return
+    # Check if duration parameter is passed: /longpress 10
+    duration = 5
+    if message.text:
+        parts = message.text.split()
+        if len(parts) > 1 and parts[1].isdigit():
+            duration = int(parts[1])
+    await execute_and_respond(message, "long_press", duration=duration)
+
+
 @dp.message(F.text == "🟢 Turn ON")
 @dp.message(Command("on"))
-async def msg_on(message: types.Message):
-    if not is_user_allowed(message.from_user.id):
+async def msg_on(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
         return
     await execute_and_respond(message, "on")
 
 
 @dp.message(F.text == "🔴 Turn OFF")
 @dp.message(Command("off"))
-async def msg_off(message: types.Message):
-    if not is_user_allowed(message.from_user.id):
+async def msg_off(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
         return
     await execute_and_respond(message, "off")
 
 
-@dp.message(F.text == "🔋 Status & Battery")
+@dp.message(F.text == "🔋 Battery & State")
 @dp.message(Command("info"))
-async def msg_info(message: types.Message):
-    if not is_user_allowed(message.from_user.id):
+async def msg_info(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
         return
     await execute_and_respond(message, "info")
 
 
-@dp.callback_query()
-async def callback_handler(callback: types.CallbackQuery):
-    if not is_user_allowed(callback.from_user.id):
-        await callback.answer("Access Denied", show_alert=True)
+@dp.message(F.text == "❤️ Health")
+@dp.message(Command("health"))
+async def msg_health(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
         return
+    stats = action_history.get_stats()
+    sched = scheduler.get_status()
+    text = (
+        f"❤️ <b>Дыягностыка і стан шлюза (Health):</b>\n\n"
+        f"• <b>Шлюз:</b> 🟢 Нармальны (OK)\n"
+        f"• <b>Аптайм бота:</b> {stats['uptime_seconds']} сек (~{stats['uptime_seconds'] // 60} хв)\n"
+        f"• <b>MAC прылады:</b> <code>{settings.switchbot_mac}</code>\n"
+        f"• <b>Файлавы лак BLE:</b> <code>{settings.ble_lock_file}</code>\n"
+        f"• <b>Аўта-расклад (Scheduler):</b> {'🟢 Уключаны' if sched['enabled'] else '🔴 Адключаны'}\n"
+        f"• <b>Зарэгістравана дзеянняў:</b> <b>{stats['total_actions']}</b> (паспяховых: {stats['successes']})\n"
+        f"• <b>Апошняе дзеянне:</b> <code>{stats['last_action_at'] or 'няма'}</code>"
+    )
+    await message.answer(text, parse_mode="HTML")
+
+
+@dp.message(F.text == "📜 Action History")
+@dp.message(Command("history"))
+async def msg_history(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+        return
+    text = action_history.format_telegram_history(limit=8)
+    await message.answer(text, parse_mode="HTML")
+
+
+@dp.message(Command("schedule"))
+async def msg_schedule(message: types.Message, bot: Bot):
+    if not await is_user_authorized(bot, message.chat.id, message.from_user.id):
+        return
+    text = scheduler.format_telegram_status()
+    await message.answer(text, parse_mode="HTML")
+
+
+@dp.callback_query()
+async def callback_handler(callback: types.CallbackQuery, bot: Bot):
+    chat_id = callback.message.chat.id if callback.message else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    if not await is_user_authorized(bot, chat_id, user_id):
+        await callback.answer("⛔ Access Denied (Няма доступу)", show_alert=True)
+        return
+
     await callback.answer()
-    if callback.data in ["press", "on", "off", "info"]:
-        await execute_and_respond(callback, callback.data)
+    data = callback.data
+
+    if data in ["press", "long_press", "on", "off", "info"]:
+        await execute_and_respond(callback, data)
+    elif data == "health":
+        stats = action_history.get_stats()
+        sched = scheduler.get_status()
+        text = (
+            f"❤️ <b>Дыягностыка і стан шлюза (Health):</b>\n\n"
+            f"• <b>Шлюз:</b> 🟢 Нармальны (OK)\n"
+            f"• <b>Аптайм:</b> {stats['uptime_seconds']} сек\n"
+            f"• <b>MAC прылады:</b> <code>{settings.switchbot_mac}</code>\n"
+            f"• <b>Аўта-расклад:</b> {'🟢 Уключаны' if sched['enabled'] else '🔴 Адключаны'}\n"
+            f"• <b>Усяго аперацый:</b> <b>{stats['total_actions']}</b>\n"
+            f"• <b>Апошняе дзеянне:</b> <code>{stats['last_action_at'] or 'няма'}</code>"
+        )
+        if callback.message:
+            await callback.message.answer(text, parse_mode="HTML")
+    elif data == "history":
+        text = action_history.format_telegram_history(limit=8)
+        if callback.message:
+            await callback.message.answer(text, parse_mode="HTML")
+    elif data == "schedule":
+        text = scheduler.format_telegram_status()
+        if callback.message:
+            await callback.message.answer(text, parse_mode="HTML")
 
 
 async def run_bot():
     if not settings.telegram_bot_token:
         logger.info("No TELEGRAM_BOT_TOKEN provided. Telegram bot will not start.")
         return
+
     bot = Bot(token=settings.telegram_bot_token)
     logger.info("Starting Telegram Bot long-polling...")
+
+    # Launch scheduler task if enabled
+    if settings.scheduler_enabled:
+        logger.info("Starting background workday random scheduler...")
+        scheduler.start_task()
+
     try:
         await dp.start_polling(bot)
     finally:
+        scheduler.stop()
         await bot.session.close()
 
 

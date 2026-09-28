@@ -44,6 +44,21 @@ class TestSwitchBotClient(unittest.IsolatedAsyncioTestCase):
 
     @patch("app.switchbot_client.BleakScanner.find_device_by_address", new_callable=AsyncMock)
     @patch("app.switchbot_client.Switchbot")
+    async def test_long_press_success(self, mock_switchbot_cls, mock_find_device):
+        mock_device = MagicMock()
+        mock_find_device.return_value = mock_device
+        mock_bot = MagicMock()
+        mock_bot.set_long_press = AsyncMock(return_value=True)
+        mock_bot.press = AsyncMock(return_value=True)
+        mock_switchbot_cls.return_value = mock_bot
+
+        res = await self.client.long_press(duration=5)
+        self.assertTrue(res["success"])
+        mock_bot.set_long_press.assert_awaited_once_with(5)
+        mock_bot.press.assert_awaited_once()
+
+    @patch("app.switchbot_client.BleakScanner.find_device_by_address", new_callable=AsyncMock)
+    @patch("app.switchbot_client.Switchbot")
     async def test_turn_on_and_off(self, mock_switchbot_cls, mock_find_device):
         mock_device = MagicMock()
         mock_find_device.return_value = mock_device

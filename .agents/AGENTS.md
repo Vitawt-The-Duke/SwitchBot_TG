@@ -8,17 +8,21 @@ This project provides a unified Gateway service on Raspberry Pi 5 to control Swi
 /projects/SwitchBot_TG/
 ├── app/
 │   ├── config.py           # Configuration loader (dataclass from .env / env vars)
-│   ├── switchbot_client.py # Async BLE client wrapping PySwitchbot with asyncio.Lock & FileLock
+│   ├── switchbot_client.py # Async BLE client with short press, long press & FileLock
+│   ├── history.py          # ActionHistory audit logger (tracks user_id, action, result)
+│   ├── scheduler.py        # Random workday scheduler (interval 1s-420s between 09:00-17:00)
 │   ├── web.py              # FastAPI application + HTML endpoints (standalone runner via `python -m app.web`)
-│   ├── bot.py              # Aiogram 3.x Telegram bot handlers (standalone runner via `python -m app.bot`)
+│   ├── bot.py              # Aiogram 3.x Telegram bot handlers with group admin authorization
 │   ├── main.py             # Combined Uvicorn + Aiogram async runner
 │   └── templates/
-│       └── index.html      # Mobile-first dark-mode Web UI
+│       └── index.html      # Mobile-first dark-mode Web UI with history & diagnostics
 ├── tests/
 │   ├── test_config.py           # Config parsing & allowed users tests
 │   ├── test_web.py              # FastAPI endpoint tests
 │   ├── test_bot.py              # Aiogram handlers & keyboards tests
-│   └── test_switchbot_client.py # SwitchBotClient & FileLock tests
+│   ├── test_switchbot_client.py # SwitchBotClient & FileLock tests
+│   ├── test_history.py          # ActionHistory audit logger tests
+│   └── test_scheduler.py        # RandomScheduler window and interval tests
 ├── scripts/
 │   ├── tune_bluetooth.sh   # Sets BLE kernel parameters (supervision_timeout=3000ms)
 │   └── install_service.sh  # Installs and enables systemd units
